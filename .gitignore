@@ -1,0 +1,27 @@
+# Node.js (Next.js)
+node_modules/
+.next/
+out/
+package-lock.json
+yarn-lock.json
+.env.local
+.env.development.local
+.env.production.local
+
+# Python (Raspberry Pi)
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+student_data.json
+attendance.json
+
+# OS Specific
+.DS_Store
+Thumbs.db
+
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+*.swo
