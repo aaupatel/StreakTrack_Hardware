@@ -15,6 +15,7 @@ __pycache__/
 *.egg-info/
 student_data.json
 attendance.json
+config.json
 
 # OS Specific
 .DS_Store

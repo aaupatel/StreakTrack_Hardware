@@ -1,0 +1,5 @@
+opencv-python
+websockets
+face_recognition
+dlib
+RPi.GPIO
