@@ -144,11 +144,12 @@ async def camera_loop():
         ret, frame = cap.read()
         if not ret:
             print("Error: Could not read frame.")
-            break
+            # break
 
         faces = face_utils.detect_faces(frame)
         for (x, y, w, h) in faces:
             GPIO.output(YELLOW_LED_PIN, GPIO.HIGH)
+            # recognized_student = face_utils.recognize_faces(face_image, students)
             recognized_student = face_utils.recognize_faces(frame[y:y+h, x:x+w], students)
             if recognized_student:
                 await mark_attendance(recognized_student)
