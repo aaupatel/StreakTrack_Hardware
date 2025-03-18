@@ -1,0 +1,90 @@
+from picamera2 import Picamera2
+import time
+
+def check_camera_working():
+    """Checks if the camera is working by attempting to capture a frame."""
+
+    try:
+        picam2 = Picamera2()
+        config = picam2.create_still_configuration() #creates a still configuration, so that it captures a single frame.
+        picam2.configure(config)
+        picam2.start()
+        time.sleep(1)  # Allow camera to warm up
+
+        frame = picam2.capture_array()
+
+        if frame is not None and frame.size > 0:
+            print("Camera is working.")
+            return True
+        else:
+            print("Camera capture failed.")
+            return False
+
+    except Exception as e:
+        print(f"Camera check failed: {e}")
+        return False
+
+    finally:
+        if 'picam2' in locals() and picam2 is not None:
+            picam2.stop()
+
+if __name__ == "__main__":
+    check_camera_working()
+ayush@raspberrypi:~/Desktop/StreakTrack $ python3 camera.py
+[1:51:27.601568520] [17883]  INFO Camera camera_manager.cpp:327 libcamera v0.4.0+53-29156679
+[1:51:27.634343800] [17893]  WARN RPiSdn sdn.cpp:40 Using legacy SDN tuning - please consider moving SDN inside rpi.denoise
+[1:51:27.636552381] [17893]  WARN RPI vc4.cpp:393 Mismatch between Unicam and CamHelper for embedded data usage!
+[1:51:27.637205115] [17893]  INFO RPI vc4.cpp:447 Registered camera /base/soc/i2c0mux/i2c@1/imx219@10 to Unicam device /dev/media4 and ISP device /dev/media0
+[1:51:27.637291260] [17893]  INFO RPI pipeline_base.cpp:1121 Using configuration file '/usr/share/libcamera/pipeline/rpi/vc4/rpi_apps.yaml'
+[1:51:27.650995449] [17883]  INFO Camera camera.cpp:1202 configuring streams: (0) 3280x2464-BGR888 (1) 3280x2464-SBGGR10_CSI2P
+[1:51:27.651694292] [17893]  INFO RPI vc4.cpp:622 Sensor: /base/soc/i2c0mux/i2c@1/imx219@10 - Selected sensor format: 3280x2464-SBGGR10_1X10 - Selected unicam format: 3280x2464-pBAA
+Camera is working.
+
+
+
+
+
+
+from picamera2 import Picamera2, Preview
+import time
+
+def live_preview():
+    """Displays a live camera preview."""
+    try:
+        picam2 = Picamera2()
+        #use Preview.QT for desktop environment, and Preview.NULL for headless.
+        picam2.start_preview(Preview.QT) # Or Preview.X if you are using X11
+
+        config = picam2.create_preview_configuration(main={"size": (640, 480)}) #adjust size as needed
+        picam2.configure(config)
+
+        picam2.start()
+
+        print("Live preview started. Press Ctrl+C to stop.")
+
+        while True:
+            time.sleep(0.1) # Add a small delay to reduce CPU usage.
+
+    except KeyboardInterrupt:
+        print("\nLive preview stopped.")
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+    finally:
+        if 'picam2' in locals() and picam2 is not None:
+            picam2.stop()
+
+if __name__ == "__main__":
+    live_preview()
+ayush@raspberrypi:~/Desktop/StreakTrack $ python3 camera.py
+[1:57:28.991189564] [18423]  INFO Camera camera_manager.cpp:327 libcamera v0.4.0+53-29156679
+[1:57:29.022379731] [18437]  WARN RPiSdn sdn.cpp:40 Using legacy SDN tuning - please consider moving SDN inside rpi.denoise
+[1:57:29.024466053] [18437]  WARN RPI vc4.cpp:393 Mismatch between Unicam and CamHelper for embedded data usage!
+[1:57:29.025100403] [18437]  INFO RPI vc4.cpp:447 Registered camera /base/soc/i2c0mux/i2c@1/imx219@10 to Unicam device /dev/media4 and ISP device /dev/media0
+[1:57:29.025157068] [18437]  INFO RPI pipeline_base.cpp:1121 Using configuration file '/usr/share/libcamera/pipeline/rpi/vc4/rpi_apps.yaml'
+[1:57:32.282273111] [18423]  INFO Camera camera.cpp:1202 configuring streams: (0) 640x480-XBGR8888 (1) 640x480-SBGGR10_CSI2P
+[1:57:32.283306818] [18437]  INFO RPI vc4.cpp:622 Sensor: /base/soc/i2c0mux/i2c@1/imx219@10 - Selected sensor format: 640x480-SBGGR10_1X10 - Selected unicam format: 640x480-pBAA
+Live preview started. Press Ctrl+C to stop.
+^C
+Live preview stopped.

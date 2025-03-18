@@ -139,6 +139,8 @@ async def camera_loop():
     if not cap.isOpened():
         print("Error: Could not open camera.")
         return
+    else:
+        print("Camera opened successfully")
 
     while website_websocket:
         ret, frame = cap.read()
