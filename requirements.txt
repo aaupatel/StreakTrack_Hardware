@@ -3,3 +3,6 @@ websockets
 face_recognition
 dlib
 RPi.GPIO
+numpy
+aiohttp
+RPLCD

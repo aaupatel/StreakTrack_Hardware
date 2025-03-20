@@ -2,13 +2,11 @@ import asyncio
 import websockets
 import json
 import cv2
-# import base64
 import RPi.GPIO as GPIO
 from datetime import datetime
-# import face_utils
 # import stream_utils
 from picamera2 import Picamera2, Preview
-import numpy as np # Add this import
+import numpy as np
 import utils
 import sqlite3
 import face_recognition
@@ -101,6 +99,9 @@ async def fetch_students():
                 students = data["students"]
                 utils.save_json("student_data.json", students)
                 print("Student data fetched and saved.")
+                utils.lcd_display("Students\nreceived")
+                await asyncio.sleep(2)
+                utils.lcd_welcome()
             else:
                 print("Error: No student data received from server.")
         else:
@@ -130,12 +131,21 @@ async def mark_attendance(recognized_student_id):
 
             utils.save_json("attendance.json", attendance_marked)
             print(f"Attendance marked for student ID: {recognized_student_id}")
+            utils.lcd_display(f"{get_student_name(recognized_student_id)}\nAttendance marked")
+            await asyncio.sleep(2)
+            utils.lcd_welcome()
             utils.blink_led(GREEN_LED_PIN, 1)
         else:
             print(f"Attendance already marked for student ID: {recognized_student_id}")
+            utils.lcd_display(f"{get_student_name(recognized_student_id)}\nAlready marked")
+            await asyncio.sleep(2)
+            utils.lcd_welcome()
             utils.blink_led(YELLOW_LED_PIN, 1)
     except Exception as e:
         print(f"Error marking attendance: {e}")
+        utils.lcd_display("Error")
+        await asyncio.sleep(2)
+        utils.lcd_welcome()
 
 async def camera_loop():
     """Main camera loop for face detection, recognition, and streaming."""
@@ -179,6 +189,7 @@ async def camera_loop():
 
                 if best_match:
                     print(f"Recognized: {best_match}")
+                    utils.lcd_display("Please wait...")
                     await mark_attendance(best_match)
                     top, right, bottom, left = face_location
                     cv2.rectangle(frame, (left, top), (right, bottom), (0, 255, 0), 2)
@@ -200,7 +211,7 @@ async def camera_loop():
 
         # cv2.imshow("Camera Feed", frame) #keep this to view the camera feed otherwise Comment out.
         # cv2.waitKey(1) #keep this to view the camera feed otherwise Comment out.
-        
+
         if streaming_active:
             frame_base64 = stream_utils.encode_frame(frame)
             try:
@@ -211,8 +222,14 @@ async def camera_loop():
 
         await asyncio.sleep(0.05)
     picam2.stop() # stop the camera.
-    cv2.destroyAllWindows()
+    # cv2.destroyAllWindows() #keep this to view the camera feed otherwise Comment out.
     db_conn.close()
+
+def get_student_name(student_id):
+    for student in students:
+        if student["_id"] == student_id:
+            return student["name"]
+    return "Unknown"
 
 async def websocket_message_handler():
     """Handles incoming WebSocket messages with error handling."""
@@ -240,9 +257,12 @@ async def main():
     try:
         GPIO.output(RED_LED_PIN, GPIO.HIGH)
         if await connect_websocket():
-          await fetch_students()
-          asyncio.create_task(websocket_message_handler())
-          await camera_loop()
+            utils.lcd_display("Connected")
+            await asyncio.sleep(2)
+            utils.lcd_welcome()
+            await fetch_students()
+            asyncio.create_task(websocket_message_handler())
+            await camera_loop()
         GPIO.output(RED_LED_PIN, GPIO.LOW)
     except KeyboardInterrupt:
         print("Exiting...")
