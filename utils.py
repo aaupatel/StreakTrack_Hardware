@@ -2,6 +2,8 @@ import json
 import RPi.GPIO as GPIO
 from datetime import datetime
 import time
+import cv2
+import base64
 
 def load_json(filepath):
     try:
@@ -21,3 +23,8 @@ def blink_led(pin, duration):
 
 def format_timestamp(timestamp):
     return timestamp.strftime("%Y-%m-%d %H:%M:%S")
+
+def encode_frame(frame):
+    _, frame_encoded = cv2.imencode('.jpg', frame)
+    frame_base64 = base64.b64encode(frame_encoded).decode('utf-8')
+    return frame_base64
