@@ -146,18 +146,30 @@ async def camera_loop():
         ret, frame = cap.read()
         if not ret:
             print("Error: Could not read frame.")
-            # break
+            continue
 
         faces = face_utils.detect_faces(frame)
-        for (x, y, w, h) in faces:
+        if faces:
+            print("Face Detected!") #added print statement
             GPIO.output(YELLOW_LED_PIN, GPIO.HIGH)
             # recognized_student = face_utils.recognize_faces(face_image, students)
-            recognized_student = face_utils.recognize_faces(frame[y:y+h, x:x+w], students)
-            if recognized_student:
-                await mark_attendance(recognized_student)
-
+            for (x, y, w, h) in faces:
+                # cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2) #draw rectangle
+                recognized_student = face_utils.recognize_faces(frame[y:y+h, x:x+w], students)
+                
+                if recognized_student:
+                    print(f"Student Recognized: {recognized_student['name']}") #added print statement
+                    await mark_attendance(recognized_student)
+                    GPIO.output(GREEN_LED_PIN, GPIO.HIGH)  # Student recognized
+                    await asyncio.sleep(1)  # keep green led on for 1 secound.
+                    GPIO.output(GREEN_LED_PIN, GPIO.LOW)
+                    cv2.putText(frame, recognized_student['name'], (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2) #add name
             GPIO.output(YELLOW_LED_PIN, GPIO.LOW)
-
+        else:
+            GPIO.output(YELLOW_LED_PIN, GPIO.LOW)
+        
+        # cv2.imshow("Camera Feed", frame) #display camera feed
+        cv2.waitKey(1) #needed for cv2.imshow
         if streaming_active:
             frame_base64 = stream_utils.encode_frame(frame)
             try:
@@ -166,8 +178,9 @@ async def camera_loop():
                 print("Error: WebSocket connection closed while streaming.")
                 break
 
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0.05)
     cap.release()
+    # cv2.destroyAllWindows() #close window when loop ends.
 
 async def websocket_message_handler():
     """Handles incoming WebSocket messages with error handling."""

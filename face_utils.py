@@ -3,13 +3,17 @@ import face_recognition
 import numpy as np
 import base64
 import requests
+import os
 
 def detect_faces(frame):
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    face_cascade = cv2.CascadeClassifier('cascades/haarcascade_frontalface_default.xml')
-    # face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-    faces = face_cascade.detectMultiScale(gray, 1.3, 5)
+    face_locations = face_recognition.face_locations(frame)
+    faces = [(left, top, (right - left), (bottom - top)) for top, right, bottom, left in face_locations]
     return faces
+    # gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    # face_cascade = cv2.CascadeClassifier('cascades/haarcascade_frontalface_default.xml')
+    # face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+    # faces = face_cascade.detectMultiScale(gray, 1.3, 5)
+    # return faces
 
 def download_and_encode_image(image_url):
     try:
@@ -36,9 +40,22 @@ def recognize_faces(face_image, students, tolerance=0.6):
         if student.get("images"):
             student_base64_images = []
             for image_url in student["images"]:
-                base64_image = download_and_encode_image(image_url)
-                if base64_image:
-                    student_base64_images.append(base64_image)
+                image_filename = image_url.split('/')[-1]
+                cache_path = f"cache_images/{image_filename}"
+                if os.path.exists(cache_path):
+                    with open(cache_path, "rb") as f:
+                        image_base64 = base64.b64encode(f.read()).decode('utf-8')
+                else:
+                    base64_image = download_and_encode_image(image_url)
+                    if base64_image:
+                        image_data = base64.b64decode(base64_image)
+                        os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+                        with open(cache_path, "wb") as f:
+                            f.write(image_data)
+                        image_base64 = base64_image
+
+            if image_base64:
+                student_base64_images.append(image_base64)
             student['base64_images'] = student_base64_images
             del student['images']
 
