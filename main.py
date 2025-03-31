@@ -12,6 +12,8 @@ import sqlite3
 import face_recognition
 import pickle
 import os
+import face_utils  # Import the face utility module
+import stream_utils  # Import the streaming utility module
 
 # GPIO Setup
 GREEN_LED_PIN = 32
@@ -65,7 +67,7 @@ async def connect_websocket():
         print("Error: Incomplete configuration in config.json.")
         return
 
-    uri = f"{website_url}/api/ws?deviceId={dev_id}&organizationId={org_id}"
+    uri = f"{website_url}/api/ws?deviceId={dev_id}&organizationId={org_id}&isHardware=true"
 
     try:
         website_websocket = await websockets.connect(uri)
@@ -89,7 +91,7 @@ async def connect_websocket():
         return False
 
 async def fetch_students():
-    """Fetches student data from the server and saves it with error handling."""
+    """Fetches student data from the server, encodes images, and saves it with error handling."""
     global students, website_websocket
     try:
         if website_websocket:
@@ -97,8 +99,9 @@ async def fetch_students():
             data = json.loads(response)
             if "students" in data:
                 students = data["students"]
-                utils.save_json("student_data.json", students)
-                print("Student data fetched and saved.")
+                await face_utils.encode_and_store_students(students) #Encode images and store.
+                # utils.save_json("student_data.json", students)
+                print("Student data fetched, encoded, and stored.")
                 utils.lcd_display("Students\nreceived")
                 await asyncio.sleep(2)
                 utils.lcd_welcome()
@@ -122,7 +125,7 @@ async def mark_attendance(recognized_student_id):
             attendance_data = {
                 "deviceId": load_config().get("deviceId"),
                 "studentId": recognized_student_id,
-                "timestamp": utils.format_timestamp(datetime.fromisoformat(attendance_marked[recognized_student_id])) #convert back to datetime for timestamp
+                "timestamp": utils.format_timestamp(datetime.fromisoformat(attendance_marked[recognized_student_id]))  # convert back to datetime for timestamp
             }
             if website_websocket:
                 await website_websocket.send(json.dumps({"type": "attendance", "attendanceData": attendance_data}))
@@ -131,13 +134,15 @@ async def mark_attendance(recognized_student_id):
 
             utils.save_json("attendance.json", attendance_marked)
             print(f"Attendance marked for student ID: {recognized_student_id}")
-            utils.lcd_display(f"{get_student_name(recognized_student_id)}\nAttendance marked")
+            # Corrected line: Use face_utils.get_student_name
+            utils.lcd_display(f"{face_utils.get_student_name(recognized_student_id, students)}\nAttendance marked")
             await asyncio.sleep(2)
             utils.lcd_welcome()
             utils.blink_led(GREEN_LED_PIN, 1)
         else:
             print(f"Attendance already marked for student ID: {recognized_student_id}")
-            utils.lcd_display(f"{get_student_name(recognized_student_id)}\nAlready marked")
+            # Corrected line: Use face_utils.get_student_name
+            utils.lcd_display(f"{face_utils.get_student_name(recognized_student_id, students)}\nAlready marked")
             await asyncio.sleep(2)
             utils.lcd_welcome()
             utils.blink_led(YELLOW_LED_PIN, 1)
@@ -149,87 +154,28 @@ async def mark_attendance(recognized_student_id):
 
 async def camera_loop():
     """Main camera loop for face detection, recognition, and streaming."""
-    picam2 = Picamera2()
-    config = picam2.create_preview_configuration(main={"size": (640, 480)})
-    picam2.configure(config)
-    picam2.start()
-
+    picam2 = face_utils.setup_camera() #Setup camera.
     try:
-        db_conn = sqlite3.connect('student_faces.db')
-        cursor = db_conn.cursor()
-    except sqlite3.Error as e:
-        print(f"Database error: {e}")
-        return
-
-    while website_websocket:
-        frame = picam2.capture_array()
-        if frame is None:
-            print("Error: Could not capture frame.")
-            continue
-
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB) # Add this line
-        face_locations = face_recognition.face_locations(frame_rgb, model="hog") #use frame_rgb
-        face_encodings = face_recognition.face_encodings(frame_rgb, face_locations) #use frame_rgb
-
-        for face_encoding, face_location in zip(face_encodings, face_locations):
-            try:
-                cursor.execute("SELECT student_id, encoding FROM students")
-                results = cursor.fetchall()
-
-                best_match = None
-                min_distance = 1.0
-
-                for student_id, encoded_data in results:
-                    known_encoding = pickle.loads(encoded_data)
-                    distance = face_recognition.face_distance([known_encoding], face_encoding)[0]
-
-                    if distance < min_distance and distance < 0.6:
-                        min_distance = distance
-                        best_match = student_id
-
-                if best_match:
-                    print(f"Recognized: {best_match}")
-                    utils.lcd_display("Please wait...")
-                    await mark_attendance(best_match)
-                    top, right, bottom, left = face_location
-                    cv2.rectangle(frame, (left, top), (right, bottom), (0, 255, 0), 2)
-                    cv2.putText(frame, best_match, (left, top - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
-                    GPIO.output(GREEN_LED_PIN, GPIO.HIGH)
-                    await asyncio.sleep(1)
-                    GPIO.output(GREEN_LED_PIN, GPIO.LOW)
-                else:
-                    top, right, bottom, left = face_location
-                    cv2.rectangle(frame, (left, top), (right, bottom), (0, 0, 255), 2)
-                GPIO.output(YELLOW_LED_PIN, GPIO.HIGH)
-            except sqlite3.Error as e:
-                print(f"Database query error: {e}")
-            except Exception as e:
-                print(f"recognition error: {e}")
-
-        else:
-            GPIO.output(YELLOW_LED_PIN, GPIO.LOW)
-
-        # cv2.imshow("Camera Feed", frame) #keep this to view the camera feed otherwise Comment out.
-        # cv2.waitKey(1) #keep this to view the camera feed otherwise Comment out.
-
-        if streaming_active:
-            frame_base64 = stream_utils.encode_frame(frame)
-            try:
-                await website_websocket.send(json.dumps({"type": "live_stream", "frame": frame_base64}))
-            except websockets.exceptions.ConnectionClosed:
-                print("Error: WebSocket connection closed while streaming.")
-                break
-
-        await asyncio.sleep(0.05)
-    picam2.stop() # stop the camera.
-    # cv2.destroyAllWindows() #keep this to view the camera feed otherwise Comment out.
-    db_conn.close()
-
-def get_student_name(student_id):
-    for student in students:
-        if student["_id"] == student_id:
-            return student["name"]
-    return "Unknown"
+        while website_websocket:
+            frame = picam2.capture_array()
+            recognized_student_id = face_utils.recognize_face(frame)
+            if recognized_student_id:
+                await mark_attendance(recognized_student_id)
+            if streaming_active:
+                frame_base64 = stream_utils.encode_frame(frame)
+                try:
+                    print("sending frame") #added log
+                    await website_websocket.send(json.dumps({"type": "live_stream", "frame": frame_base64}))
+                    print("frame sent") #added log
+                except websockets.exceptions.ConnectionClosed:
+                    print("Error: WebSocket connection closed while streaming.")
+                    break
+                except Exception as e:
+                    print(f"error sending frame: {e}")
+            await asyncio.sleep(0.05)
+        picam2.stop()
+    except Exception as e:
+        print(f"Camera Loop error: {e}")
 
 async def websocket_message_handler():
     """Handles incoming WebSocket messages with error handling."""

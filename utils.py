@@ -34,11 +34,6 @@ def blink_led(pin, duration):
 def format_timestamp(timestamp):
     return timestamp.strftime("%Y-%m-%d %H:%M:%S")
 
-def encode_frame(frame):
-    _, frame_encoded = cv2.imencode('.jpg', frame)
-    frame_base64 = base64.b64encode(frame_encoded).decode('utf-8')
-    return frame_base64
-
 def lcd_display(message):
     if lcd:
         lcd.clear()
