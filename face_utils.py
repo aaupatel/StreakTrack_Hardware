@@ -46,10 +46,10 @@ async def process_students(students, db_conn):
     tasks = [encode_and_store(student, db_conn) for student in students]
     await asyncio.gather(*tasks)
 
-def setup_camera():
+def setup_camera(width=800, height=600, framerate=15):
     """Sets up the camera."""
     picam2 = Picamera2()
-    config = picam2.create_preview_configuration(main={"size": (800, 600)})
+    config = picam2.create_preview_configuration(main={"size": (width, height)})
     picam2.configure(config)
     picam2.start()
     return picam2

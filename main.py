@@ -154,7 +154,7 @@ async def mark_attendance(recognized_student_id):
 
 async def camera_loop():
     """Main camera loop for face detection, recognition, and streaming."""
-    picam2 = face_utils.setup_camera() #Setup camera.
+    picam2 = face_utils.setup_camera(width=640, height=480, framerate=15) #Setup camera.
     try:
         while website_websocket:
             frame = picam2.capture_array()
@@ -172,7 +172,14 @@ async def camera_loop():
                     break
                 except Exception as e:
                     print(f"error sending frame: {e}")
-            await asyncio.sleep(0.05)
+
+                # Display the frame locally using OpenCV (optional, remove if not needed)
+                # cv2.imshow("Camera Feed", frame)
+                # cv2.waitKey(1)
+
+            await asyncio.sleep(0.03)
+        
+        # cv2.destroyAllWindows()
         picam2.stop()
     except Exception as e:
         print(f"Camera Loop error: {e}")
