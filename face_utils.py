@@ -22,7 +22,8 @@ async def encode_and_store_students(students):
 async def encode_and_store(student, db_conn):
     async with aiohttp.ClientSession() as session:
         encodings = []
-        for image_url in student['images']:
+        if student['images']:  # Check if there are images
+            image_url = student['images'][0]  # Only process the first image
             try:
                 image_data = await download_image(session, image_url)
                 image_array = np.frombuffer(image_data, np.uint8)
@@ -33,20 +34,23 @@ async def encode_and_store(student, db_conn):
                         encodings.append(face_enc[0])
             except Exception as e:
                 print(f"Error processing {image_url}: {e}")
+        else:
+            print(f"No images found for {student['name']}")
 
         if encodings:
             mean_encoding = np.mean(encodings, axis=0)
             # Use INSERT OR REPLACE instead of INSERT
             db_conn.execute("INSERT OR REPLACE INTO students (student_id, encoding) VALUES (?, ?)",
-                            (student['_id'], pickle.dumps(mean_encoding)))
+                             (student['_id'], pickle.dumps(mean_encoding)))
             db_conn.commit()
         else:
-            print(f"No valid faces for {student['name']}")
+            print(f"No valid faces found in the first image for {student['name']}")
+
 async def process_students(students, db_conn):
     tasks = [encode_and_store(student, db_conn) for student in students]
     await asyncio.gather(*tasks)
 
-def setup_camera(width=800, height=600, framerate=15):
+def setup_camera(width=640, height=480, framerate=15):
     """Sets up the camera."""
     picam2 = Picamera2()
     config = picam2.create_preview_configuration(main={"size": (width, height)})

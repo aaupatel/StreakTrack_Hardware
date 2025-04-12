@@ -121,14 +121,16 @@ async def mark_attendance(recognized_student_id):
     global attendance_marked, website_websocket
     try:
         if recognized_student_id not in attendance_marked:
+            timestamp = datetime.now()
             attendance_marked[recognized_student_id] = datetime.now().isoformat()  # Convert to string
-            attendance_data = {
+            student_data = {
+                "name": face_utils.get_student_name(recognized_student_id, students),
                 "deviceId": load_config().get("deviceId"),
                 "studentId": recognized_student_id,
                 "timestamp": utils.format_timestamp(datetime.fromisoformat(attendance_marked[recognized_student_id]))  # convert back to datetime for timestamp
             }
             if website_websocket:
-                await website_websocket.send(json.dumps({"type": "attendance", "attendanceData": attendance_data}))
+                await website_websocket.send(json.dumps({"type": "attendance", "student": student_data}))
             else:
                 print("Error: WebSocket connection not established. Attendance data not sent.")
 
@@ -159,14 +161,15 @@ async def camera_loop():
         while website_websocket:
             frame = picam2.capture_array()
             recognized_student_id = face_utils.recognize_face(frame)
+            
             if recognized_student_id:
                 await mark_attendance(recognized_student_id)
             if streaming_active:
                 frame_base64 = stream_utils.encode_frame(frame)
                 try:
-                    print("sending frame") #added log
+                    # print("sending frame") #added log
                     await website_websocket.send(json.dumps({"type": "live_stream", "frame": frame_base64}))
-                    print("frame sent") #added log
+                    # print("frame sent") #added log
                 except websockets.exceptions.ConnectionClosed:
                     print("Error: WebSocket connection closed while streaming.")
                     break
