@@ -4,7 +4,6 @@ import json
 import cv2
 import RPi.GPIO as GPIO
 from datetime import datetime
-# import stream_utils
 from picamera2 import Picamera2, Preview
 import numpy as np
 import utils
@@ -12,8 +11,8 @@ import sqlite3
 import face_recognition
 import pickle
 import os
-import face_utils  # Import the face utility module
-import stream_utils  # Import the streaming utility module
+import face_utils
+import stream_utils
 
 # GPIO Setup
 GREEN_LED_PIN = 32
@@ -32,6 +31,7 @@ website_websocket = None
 students = []
 attendance_marked = {}
 streaming_active = False
+face_detected = False
 
 # Config File
 CONFIG_FILE = "config.json"
@@ -39,7 +39,8 @@ CONFIG_FILE = "config.json"
 def load_config():
     """Loads configuration from config.json with error handling."""
     try:
-        config = utils.load_json(CONFIG_FILE)
+        with open(CONFIG_FILE, "r") as f:
+            config = json.load(f)
         if not config:
             raise ValueError("Config file is empty or invalid.")
         return config
@@ -73,6 +74,8 @@ async def connect_websocket():
         website_websocket = await websockets.connect(uri)
         GPIO.output(BLUE_LED_PIN, GPIO.HIGH)
         print("Connected to StreakTrack")
+        attendance_marked = {}
+        utils.save_json("attendance.json", {})
         return True #connection successful
     except websockets.exceptions.ConnectionRefusedError:
         print("Error: Connection refused by server. Check URL or server status.")
@@ -95,12 +98,14 @@ async def fetch_students():
     global students, website_websocket
     try:
         if website_websocket:
+            if os.path.exists('student_faces.db'):
+                os.remove('student_faces.db')
+                print("Old student_faces.db deleted.")
             response = await website_websocket.recv()
             data = json.loads(response)
             if "students" in data:
                 students = data["students"]
-                await face_utils.encode_and_store_students(students) #Encode images and store.
-                # utils.save_json("student_data.json", students)
+                await face_utils.encode_and_store_students(students) #Encode images and store in the database.
                 print("Student data fetched, encoded, and stored.")
                 utils.lcd_display("Students\nreceived")
                 await asyncio.sleep(2)
@@ -122,12 +127,12 @@ async def mark_attendance(recognized_student_id):
     try:
         if recognized_student_id not in attendance_marked:
             timestamp = datetime.now()
-            attendance_marked[recognized_student_id] = datetime.now().isoformat()  # Convert to string
+            attendance_marked[recognized_student_id] = datetime.now().isoformat()  # Convert datetime to ISO format string
             student_data = {
                 "name": face_utils.get_student_name(recognized_student_id, students),
                 "deviceId": load_config().get("deviceId"),
                 "studentId": recognized_student_id,
-                "timestamp": utils.format_timestamp(datetime.fromisoformat(attendance_marked[recognized_student_id]))  # convert back to datetime for timestamp
+                "timestamp": utils.format_timestamp(datetime.fromisoformat(attendance_marked[recognized_student_id]))  # Convert back to datetime for formatting
             }
             if website_websocket:
                 await website_websocket.send(json.dumps({"type": "attendance", "student": student_data}))
@@ -136,17 +141,16 @@ async def mark_attendance(recognized_student_id):
 
             utils.save_json("attendance.json", attendance_marked)
             print(f"Attendance marked for student ID: {recognized_student_id}")
-            # Corrected line: Use face_utils.get_student_name
             utils.lcd_display(f"{face_utils.get_student_name(recognized_student_id, students)}\nAttendance marked")
             await asyncio.sleep(2)
             utils.lcd_welcome()
             utils.blink_led(GREEN_LED_PIN, 1)
         else:
             print(f"Attendance already marked for student ID: {recognized_student_id}")
-            # Corrected line: Use face_utils.get_student_name
             utils.lcd_display(f"{face_utils.get_student_name(recognized_student_id, students)}\nAlready marked")
             await asyncio.sleep(2)
             utils.lcd_welcome()
+            utils.blink_led(GREEN_LED_PIN, 1)
             utils.blink_led(YELLOW_LED_PIN, 1)
     except Exception as e:
         print(f"Error marking attendance: {e}")
@@ -155,34 +159,50 @@ async def mark_attendance(recognized_student_id):
         utils.lcd_welcome()
 
 async def camera_loop():
-    """Main camera loop for face detection, recognition, and streaming."""
-    picam2 = face_utils.setup_camera(width=640, height=480, framerate=15) #Setup camera.
+    """Main camera loop for continuous face detection, recognition, and streaming."""
+    global face_detected
+    picam2 = face_utils.setup_camera(width=640, height=480, framerate=15) # Setup camera.
+    processing_face = False # Flag to prevent re-triggering during processing
+
     try:
         while website_websocket:
             frame = picam2.capture_array()
             recognized_student_id = face_utils.recognize_face(frame)
-            
-            if recognized_student_id:
-                await mark_attendance(recognized_student_id)
+
+            if recognized_student_id is not None and not processing_face:
+                processing_face = True
+                GPIO.output(YELLOW_LED_PIN, GPIO.HIGH)
+                GPIO.output(GREEN_LED_PIN, GPIO.LOW)
+                utils.lcd_display("Please Wait...")
+
+                if recognized_student_id == "Unknown":
+                    utils.lcd_display("Unknown Person")
+                    GPIO.output(RED_LED_PIN, GPIO.HIGH)
+                    await asyncio.sleep(1)
+                    utils.lcd_welcome()
+                else:
+                    await mark_attendance(recognized_student_id)
+
+                processing_face = False # Reset flag after processing
+
+            elif recognized_student_id is None:
+                GPIO.output(YELLOW_LED_PIN, GPIO.LOW)
+                GPIO.output(GREEN_LED_PIN, GPIO.LOW)
+                GPIO.output(RED_LED_PIN, GPIO.LOW)
+                processing_face = False
+
             if streaming_active:
                 frame_base64 = stream_utils.encode_frame(frame)
                 try:
-                    # print("sending frame") #added log
                     await website_websocket.send(json.dumps({"type": "live_stream", "frame": frame_base64}))
-                    # print("frame sent") #added log
                 except websockets.exceptions.ConnectionClosed:
                     print("Error: WebSocket connection closed while streaming.")
                     break
                 except Exception as e:
                     print(f"error sending frame: {e}")
 
-                # Display the frame locally using OpenCV (optional, remove if not needed)
-                # cv2.imshow("Camera Feed", frame)
-                # cv2.waitKey(1)
+            await asyncio.sleep(0.01)
 
-            await asyncio.sleep(0.03)
-        
-        # cv2.destroyAllWindows()
         picam2.stop()
     except Exception as e:
         print(f"Camera Loop error: {e}")
