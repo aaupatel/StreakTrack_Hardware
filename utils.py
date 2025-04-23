@@ -10,7 +10,7 @@ from RPLCD.i2c import CharLCD
 try:
     lcd = CharLCD('PCF8574', address=0x27, cols=20, rows=4) #20 columns and 4 rows.
     lcd.clear()
-    lcd.write_string("Welcome to StreakTrack")
+    lcd.write_string("StreakTrack is On")
 except Exception as e:
     print(f"LCD initialization failed: {e}")
     lcd = None
@@ -46,7 +46,12 @@ def lcd_display(message):
 def lcd_welcome():
     if lcd:
         lcd.clear()
-        lcd.write_string("Welcome to StreakTrack")
+        lcd.cursor_pos = (0, 0)
+        lcd.write_string("Welcome")
+        lcd.cursor_pos = (1, 3)  # Indent 'to' with spaces
+        lcd.write_string("to")
+        lcd.cursor_pos = (2, 0)
+        lcd.write_string("StreakTrack")
 
 def wrap_text(text, line_length):
     """Wraps text to fit within a given line length."""

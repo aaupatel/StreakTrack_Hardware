@@ -52,7 +52,7 @@ async def process_students(students, db_conn):
     tasks = [encode_and_store(student, db_conn) for student in students] # Create a list of tasks, where each task is to encode and store a single student's faces
     await asyncio.gather(*tasks) # Run all the encoding and storing tasks concurrently
 
-def setup_camera(width=640, height=480, framerate=15):
+def setup_camera(width=640, height=480):
     """Sets up and initializes the Raspberry Pi camera."""
     picam2 = Picamera2()
     config = picam2.create_preview_configuration(main={"size": (width, height)})
@@ -113,4 +113,11 @@ def get_student_name(student_id, students):
     for student in students:
         if student["_id"] == student_id:
             return student["name"]
+    return "Unknown"
+
+def get_enrollment_no(student_id, students):
+    """Retrieves the name of a student given their ID from the list of student data."""
+    for student in students:
+        if student["_id"] == student_id:
+            return student["enrollmentNo"]
     return "Unknown"
