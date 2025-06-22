@@ -47,8 +47,8 @@ StreakTrack is a smart attendance system that utilizes facial recognition to aut
 
 1.  **Clone the repository:**
     ```bash
-    git clone <repository_url>
-    cd StreakTrack
+    git clone https://github.com/aaupatel/StreakTrack_Hardware.git
+    cd StreakTrack_Hardware
     ```
 
 2.  **Install dependencies:**
